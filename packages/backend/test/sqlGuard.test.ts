@@ -51,8 +51,81 @@ describe('guardSelect', () => {
     rejects("SELECT * FROM users /*! INTO OUTFILE '/tmp/x' */", 403);
   });
 
-  it('rejects optimizer hint comments', () =>
-    rejects('SELECT /*+ MAX_EXECUTION_TIME(1) */ * FROM users', 403));
+  it('keeps index hints, with or without a table alias', () => {
+    expect(guardSelect('SELECT * FROM users USE INDEX (idx_email) WHERE id = 1', DB).query).toBe(
+      'SELECT * FROM `users` USE INDEX (`idx_email`) WHERE `id` = 1'
+    );
+    expect(
+      guardSelect('select * from users as u force index (idx_email, idx_username)', DB).query
+    ).toBe('SELECT * FROM `users` AS `u` FORCE INDEX (`idx_email`, `idx_username`)');
+    expect(
+      guardSelect(
+        'SELECT * FROM users u IGNORE INDEX FOR ORDER BY (idx_email) USE KEY (`PRIMARY`) ORDER BY u.id',
+        DB
+      ).query
+    ).toBe(
+      'SELECT * FROM `users` AS `u` IGNORE INDEX FOR ORDER BY (`idx_email`) USE INDEX (`PRIMARY`) ORDER BY `u`.`id` ASC'
+    );
+  });
+
+  it('keeps index hints on joined and subquery tables', () => {
+    const { query, tables } = guardSelect(
+      'SELECT u.id FROM users u JOIN orders USE INDEX (idx_user_id) ON orders.user_id = u.id ' +
+        'WHERE u.id IN (SELECT user_id FROM orders FORCE INDEX (idx_status))',
+      DB
+    );
+    expect(query).toContain('INNER JOIN `orders` USE INDEX (`idx_user_id`) ON');
+    expect(query).toContain('FROM `orders` FORCE INDEX (`idx_status`))');
+    expect(tables.sort()).toEqual(['orders', 'users']);
+  });
+
+  it('keeps SELECT STRAIGHT_JOIN and the STRAIGHT_JOIN join operator', () => {
+    expect(
+      guardSelect('SELECT STRAIGHT_JOIN u.id FROM users u JOIN orders o ON o.user_id = u.id', DB)
+        .query
+    ).toBe(
+      'SELECT STRAIGHT_JOIN `u`.`id` FROM `users` AS `u` INNER JOIN `orders` AS `o` ON `o`.`user_id` = `u`.`id`'
+    );
+    expect(
+      guardSelect('SELECT u.id FROM users u STRAIGHT_JOIN orders o ON o.user_id = u.id', DB).query
+    ).toContain('`u` STRAIGHT_JOIN `orders`');
+  });
+
+  it('keeps allow-listed optimizer hint comments, per SELECT', () => {
+    const { query } = guardSelect(
+      'SELECT /*+ NO_INDEX_MERGE(u) JOIN_ORDER(u, o) */ DISTINCT u.id FROM users u JOIN orders o ON o.user_id = u.id ' +
+        'WHERE u.id IN (SELECT /*+ SEMIJOIN(MATERIALIZATION) */ user_id FROM orders)',
+      DB
+    );
+    expect(
+      query.startsWith('SELECT /*+ NO_INDEX_MERGE(u) JOIN_ORDER(u, o) */ DISTINCT `u`.`id`')
+    ).toBe(true);
+    expect(query).toContain('(SELECT /*+ SEMIJOIN(MATERIALIZATION) */ `user_id` FROM `orders`)');
+  });
+
+  it('rejects optimizer hints that change session behaviour', () => {
+    rejects('SELECT /*+ MAX_EXECUTION_TIME(1) */ * FROM users', 403);
+    rejects('SELECT /*+ RESOURCE_GROUP(g) */ * FROM users', 403);
+    rejects('SELECT /*+ SET_VAR(max_execution_time=1) */ * FROM users', 400);
+  });
+
+  it('rejects hint comments that are not directly after SELECT', () =>
+    rejects('SELECT id /*+ NO_BNL(u) */ FROM users u', 403));
+
+  it('does not let hint syntax carry anything else through', () => {
+    rejects('SELECT * FROM users USE INDEX (idx) /*! JOIN mysql.user */', 403);
+    rejects('SELECT * FROM users USE INDEX (a`) JOIN mysql.user x) WHERE 1', 400);
+    rejects('SELECT * FROM users USE INDEX (idx_a, (SELECT 1)) WHERE 1', 400);
+    rejects('SELECT * FROM users __sqo_hint_1__', 403);
+    rejects('SELECT /*+ NO_BNL(u) */ * FROM users u; DROP TABLE users', 403);
+    rejects('SELECT STRAIGHT_JOIN * FROM mysql.user USE INDEX (PRIMARY)', 403);
+  });
+
+  it('leaves hint-like text inside string literals alone', () => {
+    expect(guardSelect("SELECT 'USE INDEX (x) /*+ a */' AS s FROM users", DB).query).toBe(
+      "SELECT 'USE INDEX (x) /*+ a */' AS `s` FROM `users`"
+    );
+  });
 
   it('rejects functions usable for exfiltration or side effects', () => {
     rejects('SELECT * FROM users WHERE SLEEP(1) = 0', 403);

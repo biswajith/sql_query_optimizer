@@ -1,5 +1,6 @@
 import { Parser } from 'node-sql-parser';
 import { AppError, ErrorType } from '../middleware/errorHandler';
+import { extractHints, restoreHints } from './sqlHints';
 
 const parser = new Parser();
 
@@ -34,7 +35,8 @@ export interface GuardedQuery {
    * The query re-serialized from the validated syntax tree. This, never the
    * caller's text, is what may be sent to MySQL: comments (including MySQL
    * executable comments, which the parser cannot see into) do not survive
-   * re-serialization, so MySQL runs exactly what was validated.
+   * re-serialization, so MySQL runs exactly what was validated. Validated
+   * index and optimizer hints are re-attached in a generated, canonical form.
    */
   query: string;
   /** Real tables referenced (CTE names excluded), unqualified. */
@@ -51,20 +53,23 @@ export interface GuardedQuery {
 export function guardSelect(sql: string, database: string): GuardedQuery {
   const input = sql.trim().replace(/;\s*$/, '').trim();
 
-  // MySQL executes the contents of /*! ... */ and honours /*+ ... */ hints,
-  // while the parser treats both as plain comments. Refuse them outright
-  // rather than rely only on re-serialization dropping them.
-  if (/\/\*[!+]/.test(input)) {
+  // MySQL executes the contents of /*! ... */, which the parser treats as a
+  // plain comment. Refuse it anywhere in the text, even inside a string.
+  if (input.includes('/*!')) {
     throw new AppError(
       ErrorType.SECURITY_ERROR,
-      'Executable comments (/*! ... */) and optimizer hint comments (/*+ ... */) are not allowed',
+      'Executable comments (/*! ... */) are not allowed',
       403
     );
   }
 
+  // Index hints, SELECT STRAIGHT_JOIN and optimizer hint comments are lifted
+  // out here and put back after re-serialization (see sqlHints.ts).
+  const hints = extractHints(input);
+
   let parsed;
   try {
-    parsed = parser.parse(input, PARSER_OPTIONS);
+    parsed = parser.parse(hints.sql, PARSER_OPTIONS);
   } catch (error: any) {
     throw new AppError(
       ErrorType.PARSE_ERROR,
@@ -133,8 +138,9 @@ export function guardSelect(sql: string, database: string): GuardedQuery {
 
   let query: string;
   try {
-    query = parser.sqlify(ast, PARSER_OPTIONS);
+    query = restoreHints(parser.sqlify(ast, PARSER_OPTIONS), hints);
   } catch (error: any) {
+    if (error instanceof AppError) throw error;
     throw new AppError(
       ErrorType.PARSE_ERROR,
       'The query uses syntax this tool cannot safely reproduce',
