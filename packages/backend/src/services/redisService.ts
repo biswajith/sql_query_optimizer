@@ -1,15 +1,12 @@
 import { getRedisClient, REDIS_TTL } from '../config/redis';
 import { TableInfo, IndexInfo } from '@sql-optimizer/shared';
 import { logger } from '../utils/logger';
+import { getDatabaseName } from '../config/database';
 
 const CACHE_PREFIX = {
   TABLE_SCHEMA: 'table_schema',
   TABLE_INDEXES: 'table_indexes',
 };
-
-function getDatabaseName(): string {
-  return process.env.MYSQL_DATABASE || 'default';
-}
 
 function buildCacheKey(prefix: string, tableName: string): string {
   const dbName = getDatabaseName();
@@ -30,7 +27,7 @@ export async function getCachedTableSchema(tableName: string): Promise<TableInfo
     logger.debug(`Cache MISS for table schema: ${tableName}`);
     return null;
   } catch (error) {
-    logger.error('Redis get error:', error);
+    logger.warn('Redis get failed; falling back to MySQL');
     return null;
   }
 }
@@ -42,7 +39,7 @@ export async function cacheTableSchema(tableInfo: TableInfo): Promise<void> {
     await redis.setex(key, REDIS_TTL, JSON.stringify(tableInfo));
     logger.debug(`Cached table schema: ${tableInfo.tableName}`);
   } catch (error) {
-    logger.error('Redis set error:', error);
+    logger.warn('Redis set failed; result not cached');
   }
 }
 
@@ -60,7 +57,7 @@ export async function getCachedTableIndexes(tableName: string): Promise<IndexInf
     logger.debug(`Cache MISS for table indexes: ${tableName}`);
     return null;
   } catch (error) {
-    logger.error('Redis get error:', error);
+    logger.warn('Redis get failed; falling back to MySQL');
     return null;
   }
 }
@@ -72,7 +69,7 @@ export async function cacheTableIndexes(tableName: string, indexes: IndexInfo[])
     await redis.setex(key, REDIS_TTL, JSON.stringify(indexes));
     logger.debug(`Cached table indexes: ${tableName}`);
   } catch (error) {
-    logger.error('Redis set error:', error);
+    logger.warn('Redis set failed; result not cached');
   }
 }
 

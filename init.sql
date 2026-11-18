@@ -96,3 +96,10 @@ INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase) VALU
 (8, 6, 1, 129.99),
 (8, 5, 1, 49.99);
 
+
+-- Read-only account for the optimizer backend. It only ever needs to run
+-- EXPLAIN and SHOW statements, so it gets no write privileges.
+-- (Local development credentials; change them anywhere that matters.)
+CREATE USER IF NOT EXISTS 'optimizer_ro'@'%' IDENTIFIED BY 'optimizer_ro_pass';
+GRANT SELECT, SHOW VIEW ON testdb.* TO 'optimizer_ro'@'%';
+FLUSH PRIVILEGES;

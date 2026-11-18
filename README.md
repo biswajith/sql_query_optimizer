@@ -1,11 +1,11 @@
 # SQL Query Optimizer
 
-A TypeScript-based monorepo application that analyzes SQL queries and provides optimization suggestions using OpenAI's GPT-4o-mini model, with table schema caching in Redis.
+A TypeScript-based monorepo application that analyzes SQL queries and provides optimization suggestions with a LangChain tool-using agent (default model: OpenAI GPT-6 Luna, configurable via LLM_MODEL), with table schema caching in Redis.
 
 ## Features
 
-- 🚀 **AI-Powered Optimization**: Uses OpenAI GPT-4o-mini to analyze and suggest query improvements
-- 🔒 **LLM-Based Security**: Validates all queries before execution to prevent destructive operations
+- 🚀 **AI-Powered Optimization**: An agent proposes rewrites, checks each with EXPLAIN, and the server verifies the final query's cost
+- 🔒 **Deterministic SQL Guard**: A SQL parser accepts only a single read-only SELECT; the backend uses a read-only MySQL user
 - ⚡ **Redis Caching**: Caches table schemas and indexes for faster repeated queries
 - 📊 **EXPLAIN Plan Analysis**: Generates and displays MySQL EXPLAIN plans
 - 🎨 **Modern UI**: Built with React and Adobe Spectrum design system
@@ -22,7 +22,7 @@ This is a monorepo containing three packages:
 
 ## Prerequisites
 
-- **Node.js**: 18.x or higher
+- **Node.js**: 20.x or higher
 - **npm**: 9.x or higher
 - **MySQL**: 5.7 or higher (or use Docker)
 - **Redis**: 7.x or higher (or use Docker)
@@ -82,8 +82,8 @@ NODE_ENV=development
 # MySQL (using Docker defaults)
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=rootpass
+MYSQL_USER=optimizer_ro
+MYSQL_PASSWORD=optimizer_ro_pass
 MYSQL_DATABASE=testdb
 
 # Redis (using Docker defaults)
@@ -94,7 +94,7 @@ REDIS_TTL=3600
 
 # OpenAI - ADD YOUR KEY HERE
 OPENAI_API_KEY=sk-your-actual-api-key-here
-OPENAI_MODEL=gpt-4o-mini
+LLM_MODEL=openai:gpt-6-luna
 
 # CORS
 CORS_ORIGIN=http://localhost:5173
@@ -290,7 +290,7 @@ If you prefer to use local MySQL and Redis installations:
 - **MySQL2** - Database client
 - **ioredis** - Redis client
 - **LangChain.js** - LLM orchestration
-- **OpenAI GPT-4o-mini** - Query analysis and optimization
+- **LangChain v1 agent** - Query optimization (default model OpenAI GPT-6 Luna)
 
 ### Frontend
 - **React 18** + **TypeScript**
@@ -312,14 +312,9 @@ If you prefer to use local MySQL and Redis installations:
 
 ## Cost Considerations
 
-Using GPT-4o-mini, typical costs per optimization request:
-- **LLM Calls**: 3-5 calls per request
-  - Table extraction: ~$0.0001
-  - Query validation: ~$0.0001 per validation (1-3 validations)
-  - Optimization: ~$0.001-0.01
-- **Total**: ~$0.001-0.015 per request
+Each optimization request is one agent run: one model call per round, with up to 6 EXPLAIN tool calls. Safety checks and table extraction use a SQL parser and make no model calls. Cost depends on the model set in `LLM_MODEL`; see your provider's pricing.
 
-Caching significantly reduces costs for repeated queries.
+Redis caches table schemas and indexes, which saves MySQL round trips, not model calls.
 
 ## Future Enhancements
 
