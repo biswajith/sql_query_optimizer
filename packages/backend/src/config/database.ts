@@ -7,6 +7,20 @@ export function getDatabaseName(): string {
   return process.env.MYSQL_DATABASE || 'testdb';
 }
 
+/**
+ * There is deliberately no default account. Falling back to root would give
+ * every caller of the API whatever root can read.
+ */
+export function requireDbUser(): string {
+  const user = process.env.MYSQL_USER;
+  if (!user) {
+    throw new Error(
+      'MYSQL_USER is not set. Use a read-only account (see init.sql for optimizer_ro).'
+    );
+  }
+  return user;
+}
+
 let pool: mysql.Pool | null = null;
 
 export function getDbPool(): mysql.Pool {
@@ -14,7 +28,7 @@ export function getDbPool(): mysql.Pool {
     pool = mysql.createPool({
       host: process.env.MYSQL_HOST || 'localhost',
       port: parseInt(process.env.MYSQL_PORT || '3306'),
-      user: process.env.MYSQL_USER || 'root',
+      user: requireDbUser(),
       password: process.env.MYSQL_PASSWORD || '',
       database: getDatabaseName(),
       waitForConnections: true,

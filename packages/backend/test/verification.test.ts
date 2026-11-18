@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { verifyOptimization } from '../src/services/verification';
 
-const explainWith = (queryCost: number | null) =>
-  vi.fn(async () => ({ rows: [], queryCost }));
+const explainWith = (queryCost: number | null) => vi.fn(async () => ({ rows: [], queryCost }));
 
 const base = { originalQuery: 'SELECT * FROM users', originalCost: 100, database: 'testdb' };
 
@@ -10,6 +9,18 @@ describe('verifyOptimization', () => {
   it('reports no_change without calling EXPLAIN', async () => {
     const explain = explainWith(1);
     const v = await verifyOptimization({ ...base, candidate: 'SELECT *  FROM users;', explain });
+    expect(v.status).toBe('no_change');
+    expect(explain).not.toHaveBeenCalled();
+  });
+
+  it('reports no_change when the candidate differs only in formatting', async () => {
+    const explain = explainWith(1);
+    const v = await verifyOptimization({
+      ...base,
+      originalQuery: 'SELECT * FROM `users`',
+      candidate: 'select *\nfrom users',
+      explain,
+    });
     expect(v.status).toBe('no_change');
     expect(explain).not.toHaveBeenCalled();
   });

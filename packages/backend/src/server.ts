@@ -8,6 +8,15 @@ import { apiLimiter } from './middleware/rateLimiter';
 import { logger } from './utils/logger';
 import { getModelName } from './config/llm';
 import { getRedisClient } from './config/redis';
+import { requireDbUser } from './config/database';
+
+// Refuse to start without an explicit database account.
+try {
+  requireDbUser();
+} catch (error: any) {
+  logger.error(error.message);
+  process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -62,4 +71,3 @@ process.on('uncaughtException', (error) => {
 });
 
 export default app;
-

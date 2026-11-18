@@ -9,21 +9,38 @@ export interface ExplainResult {
   queryCost: number | null;
 }
 
+// MySQL's own error text is never sent to the client: functions such as
+// EXTRACTVALUE echo their argument in the message, which turns error output
+// into a channel for reading row data. Clients get a fixed message chosen by
+// error code; the detail is logged server-side.
+const SQL_ERROR_MESSAGES: Record<string, string> = {
+  ER_PARSE_ERROR: 'MySQL could not parse the query (syntax error)',
+  ER_NO_SUCH_TABLE: 'A table referenced by the query does not exist',
+  ER_BAD_TABLE_ERROR: 'A table referenced by the query does not exist',
+  ER_BAD_FIELD_ERROR: 'The query references a column that does not exist',
+  ER_NON_UNIQ_ERROR: 'The query has an ambiguous column reference',
+  ER_NONUNIQ_TABLE: 'The query uses the same table name or alias twice',
+  ER_WRONG_FIELD_WITH_GROUP: 'The query selects a non-aggregated column not in GROUP BY',
+  ER_SP_DOES_NOT_EXIST: 'The query calls a function that does not exist',
+  ER_TABLEACCESS_DENIED_ERROR: 'The database user is not allowed to read a referenced table',
+  ER_DBACCESS_DENIED_ERROR: 'The database user is not allowed to access that database',
+  ER_QUERY_TIMEOUT: 'MySQL timed out while planning the query',
+};
+
 /**
  * Turn a mysql2 error into an AppError the client can act on: SQL-level
- * problems (bad syntax, unknown table/column, denied) are the caller's and
- * return 400; connectivity problems return 503.
+ * problems are the caller's and return 400 with a fixed message;
+ * connectivity problems return 503.
  */
 function toAppError(error: any, context: string): AppError {
   if (error instanceof AppError) return error;
 
   if (error?.sqlMessage) {
-    return new AppError(
-      ErrorType.DATABASE_ERROR,
-      `${context}: ${error.sqlMessage}`,
-      400,
-      { code: error.code }
-    );
+    logger.warn(`${context}: [${error.code}] ${error.sqlMessage}`);
+    const message = SQL_ERROR_MESSAGES[error.code] ?? 'MySQL rejected the query';
+    return new AppError(ErrorType.DATABASE_ERROR, `${context}: ${message}`, 400, {
+      code: error.code,
+    });
   }
 
   logger.error(`${context}:`, error);
@@ -79,8 +96,8 @@ export async function getTableIndexes(tableName: string): Promise<IndexInfo[]> {
 }
 
 /**
- * EXPLAIN a query. The caller must have passed the query through guardSelect
- * first: plain EXPLAIN of a SELECT plans the query without executing it.
+ * EXPLAIN a query. Only ever pass GuardedQuery.query from guardSelect here,
+ * never caller-supplied text: the statement is built by concatenation.
  */
 export async function executeExplain(guardedQuery: string): Promise<ExplainResult> {
   try {

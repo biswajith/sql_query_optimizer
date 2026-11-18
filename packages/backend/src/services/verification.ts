@@ -43,6 +43,15 @@ export async function verifyOptimization(params: {
   let guardedQuery: string;
   try {
     guardedQuery = guardSelect(candidate, database).query;
+    // Same statement once both are re-serialized (formatting-only changes).
+    if (guardedQuery === originalQuery) {
+      return {
+        status: 'no_change',
+        note: 'No rewrite beat the original query.',
+        optimizedQuery: originalQuery,
+        optimizedCost: originalCost,
+      };
+    }
     result = await explain(guardedQuery);
   } catch (error) {
     return {
@@ -69,8 +78,7 @@ export async function verifyOptimization(params: {
     };
   }
 
-  const change =
-    originalCost > 0 ? ((result.queryCost - originalCost) / originalCost) * 100 : 0;
+  const change = originalCost > 0 ? ((result.queryCost - originalCost) / originalCost) * 100 : 0;
   const estimatedImprovement = `Estimated cost ${originalCost.toFixed(2)} → ${result.queryCost.toFixed(
     2
   )} (${change <= 0 ? '' : '+'}${change.toFixed(1)}%)`;

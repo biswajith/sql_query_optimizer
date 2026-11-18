@@ -11,7 +11,8 @@ const input = {
 };
 
 const answer = {
-  optimizedQuery: 'SELECT u.* FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)',
+  optimizedQuery:
+    'SELECT u.* FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)',
   reasoning: 'r',
   keyIssues: ['k'],
   indexRecommendations: [
@@ -33,7 +34,11 @@ describe('runOptimizerAgent', () => {
       ],
     });
 
-    const out = await runOptimizerAgent(input, { model: model as any, database: 'testdb', explain });
+    const out = await runOptimizerAgent(input, {
+      model: model as any,
+      database: 'testdb',
+      explain,
+    });
 
     expect(explain).toHaveBeenCalledTimes(1); // the DROP never reached the database
     expect(out.attempts).toHaveLength(2);
