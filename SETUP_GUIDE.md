@@ -169,7 +169,7 @@ If you prefer local installations:
 
    # OpenAI Configuration - IMPORTANT: Add your key here!
    OPENAI_API_KEY=sk-your-actual-openai-api-key-here
-   OPENAI_MODEL=gpt-4o-mini
+   LLM_MODEL=openai:gpt-6-luna
 
    # CORS Configuration
    CORS_ORIGIN=http://localhost:5173

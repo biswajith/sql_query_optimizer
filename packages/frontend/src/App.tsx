@@ -6,9 +6,6 @@ import {
   Flex,
   Heading,
   Divider,
-  AlertDialog,
-  DialogTrigger,
-  ActionButton,
   Content,
 } from '@adobe/react-spectrum';
 import { QueryInput } from './components/QueryInput';
@@ -84,7 +81,7 @@ function App() {
               borderColor="negative"
               borderRadius="medium"
               padding="size-200"
-              backgroundColor="red-100"
+              UNSAFE_style={{ backgroundColor: '#FDECEA' }}
             >
               <Heading level={4} UNSAFE_style={{ color: '#C5221F' }}>Error</Heading>
               <Content>{error}</Content>

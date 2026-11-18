@@ -8,7 +8,7 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30 seconds
+  timeout: 150000, // the agent may run several EXPLAIN rounds
 });
 
 export async function optimizeQuery(

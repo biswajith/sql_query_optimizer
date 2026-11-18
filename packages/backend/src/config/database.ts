@@ -1,24 +1,59 @@
 import mysql from 'mysql2/promise';
-import dotenv from 'dotenv';
+import { logger } from '../utils/logger';
 
-dotenv.config();
+export const STATEMENT_TIMEOUT_MS = parseInt(process.env.MYSQL_STATEMENT_TIMEOUT_MS || '10000');
 
-export const dbConfig = {
-  host: process.env.MYSQL_HOST || 'localhost',
-  port: parseInt(process.env.MYSQL_PORT || '3306'),
-  user: process.env.MYSQL_USER || 'root',
-  password: process.env.MYSQL_PASSWORD || '',
-  database: process.env.MYSQL_DATABASE || 'testdb',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-};
+export function getDatabaseName(): string {
+  return process.env.MYSQL_DATABASE || 'testdb';
+}
+
+/**
+ * There is deliberately no default account. Falling back to root would give
+ * every caller of the API whatever root can read.
+ */
+export function requireDbUser(): string {
+  const user = process.env.MYSQL_USER;
+  if (!user) {
+    throw new Error(
+      'MYSQL_USER is not set. Use a read-only account (see init.sql for optimizer_ro).'
+    );
+  }
+  return user;
+}
 
 let pool: mysql.Pool | null = null;
 
 export function getDbPool(): mysql.Pool {
   if (!pool) {
-    pool = mysql.createPool(dbConfig);
+    pool = mysql.createPool({
+      host: process.env.MYSQL_HOST || 'localhost',
+      port: parseInt(process.env.MYSQL_PORT || '3306'),
+      user: requireDbUser(),
+      password: process.env.MYSQL_PASSWORD || '',
+      database: getDatabaseName(),
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      multipleStatements: false,
+    });
+
+    // Defence in depth on top of a read-only DB user: every pooled
+    // connection refuses writes and caps SELECT execution time.
+    // (mysql2 emits the callback-style connection here, whatever the typings say.)
+    pool.on('connection', (pooled) => {
+      const connection = pooled as unknown as {
+        query(sql: string, cb: (err: unknown) => void): void;
+      };
+      connection.query('SET SESSION TRANSACTION READ ONLY', (err: unknown) => {
+        if (err) logger.warn('Could not set session read-only:', err);
+      });
+      connection.query(
+        `SET SESSION MAX_EXECUTION_TIME = ${STATEMENT_TIMEOUT_MS}`,
+        (err: unknown) => {
+          if (err) logger.warn('Could not set MAX_EXECUTION_TIME:', err);
+        }
+      );
+    });
   }
   return pool;
 }
@@ -30,8 +65,7 @@ export async function testConnection(): Promise<boolean> {
     connection.release();
     return true;
   } catch (error) {
-    console.error('MySQL connection test failed:', error);
+    logger.error('MySQL connection test failed:', error);
     return false;
   }
 }
-

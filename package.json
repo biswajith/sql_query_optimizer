@@ -2,26 +2,26 @@
   "name": "sql-query-optimizer",
   "version": "1.0.0",
   "private": true,
-  "description": "TypeScript-based SQL query optimizer using OpenAI GPT-4o-mini",
+  "description": "TypeScript SQL query optimizer agent (LangChain, model-provider agnostic)",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build -w packages/shared && npm run build -w packages/backend -w packages/frontend",
     "clean": "rm -rf node_modules packages/*/node_modules packages/*/dist",
     "backend:dev": "npm run dev -w packages/backend",
-    "frontend:dev": "npm run dev -w packages/frontend"
+    "frontend:dev": "npm run dev -w packages/frontend",
+    "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "typescript": "^5.3.3",
-    "prettier": "^3.1.1",
-    "eslint": "^8.56.0"
+    "@types/node": "^26.6.6",
+    "eslint": "^10.15.0",
+    "prettier": "^3.10.1",
+    "typescript": "^7.0.2"
   },
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=20.0.0",
     "npm": ">=9.0.0"
   }
 }
-

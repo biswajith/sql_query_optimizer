@@ -3,9 +3,11 @@ import { Flex, Heading, Text, View } from '@adobe/react-spectrum';
 interface QueryComparisonProps {
   originalQuery: string;
   optimizedQuery: string;
+  /** Only highlight the suggestion as a win when the server verified it. */
+  improved: boolean;
 }
 
-export function QueryComparison({ originalQuery, optimizedQuery }: QueryComparisonProps) {
+export function QueryComparison({ originalQuery, optimizedQuery, improved }: QueryComparisonProps) {
   return (
     <Flex direction="row" gap="size-300" wrap>
       <View
@@ -25,12 +27,12 @@ export function QueryComparison({ originalQuery, optimizedQuery }: QueryComparis
         flex={1}
         minWidth="size-5000"
         borderWidth="thin"
-        borderColor="positive"
+        borderColor={improved ? 'positive' : 'default'}
         borderRadius="medium"
         padding="size-200"
-        backgroundColor="positive"
+        backgroundColor={improved ? 'positive' : undefined}
       >
-        <Heading level={4}>Optimized Query</Heading>
+        <Heading level={4}>{improved ? 'Optimized Query' : 'Suggested Query'}</Heading>
         <Text UNSAFE_style={{ fontFamily: 'monospace', fontSize: '13px', whiteSpace: 'pre-wrap' }}>
           {optimizedQuery}
         </Text>

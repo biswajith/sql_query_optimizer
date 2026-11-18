@@ -1,14 +1,22 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import optimizerRoutes from './routes/optimizer.routes';
 import { errorHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimiter';
 import { logger } from './utils/logger';
+import { getModelName } from './config/llm';
+import { getRedisClient } from './config/redis';
+import { requireDbUser } from './config/database';
 
-// Load environment variables
-dotenv.config();
+// Refuse to start without an explicit database account.
+try {
+  requireDbUser();
+} catch (error: any) {
+  logger.error(error.message);
+  process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -16,11 +24,8 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: CORS_ORIGIN,
-  credentials: true,
-}));
-app.use(express.json({ limit: '10mb' }));
+app.use(cors({ origin: CORS_ORIGIN }));
+app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Apply rate limiting to API routes
@@ -49,6 +54,9 @@ app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
   logger.info(`CORS enabled for: ${CORS_ORIGIN}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.info(`Model: ${getModelName()}`);
+  // Connect to Redis up front so the first request can use the cache.
+  getRedisClient();
 });
 
 // Handle unhandled promise rejections
@@ -63,4 +71,3 @@ process.on('uncaughtException', (error) => {
 });
 
 export default app;
-

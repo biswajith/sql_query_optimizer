@@ -295,7 +295,7 @@ REDIS_TTL=3600
 
 # OpenAI Configuration
 OPENAI_API_KEY=sk-your-actual-openai-api-key-here
-OPENAI_MODEL=gpt-4o-mini
+LLM_MODEL=openai:gpt-6-luna
 
 # CORS Configuration
 CORS_ORIGIN=http://localhost:5173
